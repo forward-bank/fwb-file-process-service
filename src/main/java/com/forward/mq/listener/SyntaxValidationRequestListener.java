@@ -94,7 +94,8 @@ public class SyntaxValidationRequestListener implements MessageListener {
                 return;
             }
 
-            correlationId      = message.getJMSMessageID();
+            //correlationId      = message.getJMSMessageID();
+            correlationId = message.getJMSCorrelationID();
             String requestBody = ((TextMessage) message).getText();
 
             System.out.println("  Correlation ID  : " + correlationId);
