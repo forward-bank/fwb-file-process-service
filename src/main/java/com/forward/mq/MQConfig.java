@@ -7,8 +7,8 @@ public class MQConfig {
     private final String channel;
     private final String queueManager;
 
-    public static final String REQUEST_QUEUE  = "SYNTAX.VALIDATION.REQUEST.QUEUE";
-    public static final String RESPONSE_QUEUE = "SYNTAX.VALIDATION.RESPONSE.QUEUE";
+    public static final String REQUEST_QUEUE  = "FILE.PROCESS.SERVICE.REQUEST.QUEUE";
+    public static final String RESPONSE_QUEUE = "FILE.PROCESS.SERVICE.RESPONSE.QUEUE";
 
     public MQConfig(String host, int port, String channel, String queueManager) {
         this.host         = host;

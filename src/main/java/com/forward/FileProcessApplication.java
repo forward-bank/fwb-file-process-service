@@ -1,17 +1,23 @@
 package com.forward;
 
 import com.forward.mq.MQConfig;
-import com.forward.mq.listener.SyntaxValidationRequestListener;
+import com.forward.mq.listener.FileProcessRequestListener;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ConfigurableApplicationContext;
 
-public class SyntaxValidationApplication {
+@SpringBootApplication
+public class FileProcessApplication {
 
     public static void main(String[] args) {
         System.out.println("╔═════════════════════════════════════════╗");
-        System.out.println("║   SYNTAX VALIDATION SERVICE STARTING    ║");
+        System.out.println("║     FILE PROCESS SERVICE STARTING       ║");
         System.out.println("╚═════════════════════════════════════════╝");
 
+        ConfigurableApplicationContext context = SpringApplication.run(FileProcessApplication.class, args);
+
         MQConfig config = MQConfig.fromSystemPropertiesOrDefaults();
-        SyntaxValidationRequestListener listener = new SyntaxValidationRequestListener(config);
+        FileProcessRequestListener listener = new FileProcessRequestListener(config);
 
         // Register shutdown hook so Ctrl+C cleans up gracefully
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -19,16 +25,11 @@ public class SyntaxValidationApplication {
             System.out.println("║         SHUTTING DOWN SERVICE           ║");
             System.out.println("╚═════════════════════════════════════════╝");
             listener.stop();
+            context.close();
         }));
 
         listener.start();
 
-        // Block main thread — listener runs on the MQ session thread
-        System.out.println("✓ Syntax Validation Service running. Press Ctrl+C to stop.\n");
-        try {
-            Thread.currentThread().join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        System.out.println("✓ File Process Service running. Press Ctrl+C to stop.\n");
     }
 }

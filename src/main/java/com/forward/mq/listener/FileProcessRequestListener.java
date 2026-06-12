@@ -1,9 +1,9 @@
 package com.forward.mq.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.forward.debulk.FileDebulkingProcessor;
+import com.forward.model.DebulkingResponse;
 import com.forward.mq.MQConfig;
-import com.forward.model.SyntaxValidationResponse;
-import com.forward.validator.SyntaxValidator;
 
 import com.ibm.mq.jakarta.jms.MQConnectionFactory;
 import com.ibm.msg.client.jakarta.wmq.WMQConstants;
@@ -11,12 +11,12 @@ import com.ibm.msg.client.jakarta.wmq.WMQConstants;
 import jakarta.jms.*;
 import java.util.Map;
 
-public class SyntaxValidationRequestListener implements MessageListener {
+public class FileProcessRequestListener implements MessageListener {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final MQConfig        mqConfig;
-    private final SyntaxValidator validator;
+    private final FileDebulkingProcessor fileDebulkingProcessor;
 
     // ── Two fully isolated connections ────────────────────────────────────────
     // Consumer and producer on separate connections means zero shared TCP state.
@@ -30,9 +30,9 @@ public class SyntaxValidationRequestListener implements MessageListener {
     private MessageConsumer consumer;
     private MessageProducer producer;
 
-    public SyntaxValidationRequestListener(MQConfig mqConfig) {
+    public FileProcessRequestListener(MQConfig mqConfig) {
         this.mqConfig  = mqConfig;
-        this.validator = new SyntaxValidator();
+        this.fileDebulkingProcessor = new FileDebulkingProcessor();
     }
 
     public void start() {
@@ -63,14 +63,14 @@ public class SyntaxValidationRequestListener implements MessageListener {
             System.out.println("✓ Responding to : " + MQConfig.RESPONSE_QUEUE);
 
         } catch (JMSException e) {
-            throw new RuntimeException("Failed to start SyntaxValidationRequestListener", e);
+            throw new RuntimeException("Failed to start FileProcessRequestListener", e);
         }
     }
 
     @Override
     public void onMessage(Message message) {
         System.out.println("\n" + "=".repeat(80));
-        System.out.println("SyntaxValidationRequestListener: message received");
+        System.out.println("FileProcessRequestListener: message received");
 
         String correlationId = null;
         boolean responseSent = false;
@@ -102,9 +102,7 @@ public class SyntaxValidationRequestListener implements MessageListener {
             System.out.println("  Request Payload : " + requestBody);
 
             Map<String, Object> requestMap = OBJECT_MAPPER.readValue(requestBody, Map.class);
-            String paymentXmlPath          = (String) requestMap.get("paymentXmlPath");
-
-            SyntaxValidationResponse response = validator.validate(paymentXmlPath);
+            DebulkingResponse response = fileDebulkingProcessor.process(requestMap);
             System.out.println("  Validation Result : " + response);
 
             System.out.println("  → Attempting sendResponse...");
@@ -139,7 +137,7 @@ public class SyntaxValidationRequestListener implements MessageListener {
     // ── Send helpers ──────────────────────────────────────────────────────────
 
     private void sendResponse(String correlationId,
-                              SyntaxValidationResponse response) throws Exception {
+                              DebulkingResponse response) throws Exception {
         String payload = OBJECT_MAPPER.writeValueAsString(
                 Map.of(
                         "status",    response.getStatus(),
@@ -158,7 +156,7 @@ public class SyntaxValidationRequestListener implements MessageListener {
 
     private void trySendErrorResponse(String correlationId) {
         try {
-            sendResponse(correlationId, SyntaxValidationResponse.invalid("SVE_INTERNAL_ERROR"));
+            sendResponse(correlationId, DebulkingResponse.invalid("SVE_INTERNAL_ERROR"));
         } catch (Exception e) {
             System.err.println("✗ Failed to send error response: " + e.getMessage());
         }
