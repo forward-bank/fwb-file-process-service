@@ -5,79 +5,82 @@ import com.forward.model.CheckDuplicateRequest;
 import com.forward.model.CheckDuplicateResponse;
 import com.forward.model.GetMessageIdResponse;
 import com.forward.repository.FileMessageIdRepository;
+import com.forward.s3.S3FileDownloader;
+import com.forward.xml.Pain008MsgIdExtractor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
  * Handles duplicate-file detection using the FILE_MESSAGE_ID table.
  *
- * Duplicate strategy — optimistic insert:
- *   1. Attempt to INSERT a row (fileId PK, custId, msgId).
- *   2. If it succeeds → the file is new (not a duplicate).
- *   3. If it throws DataIntegrityViolationException → a row with the same
- *      (CUST_ID, MSG_ID) unique index already exists → the file is a duplicate.
+ * getMessageId flow:
+ *   1. Download the payment XML from S3 using the provided fileS3Path.
+ *   2. Parse MsgId from <GrpHdr><MsgId> in the pain.008 document.
+ *   3. Return it so the caller can pass it to checkDuplicate.
  *
- * This avoids a SELECT-then-INSERT race condition and keeps the logic simple.
- * The unique index on (CUST_ID, MSG_ID) is enforced at the database level, so
- * no application-level locking is needed.
+ * checkDuplicate flow (optimistic insert):
+ *   1. Attempt to INSERT (fileId, custId, msgId).
+ *   2. INSERT succeeds  → file is new        → isDuplicate=false
+ *   3. DataIntegrityViolationException thrown → duplicate detected → isDuplicate=true
+ *      (unique index on CUST_ID + MSG_ID fires)
  */
 @Service
 public class DuplicateCheckService {
 
     private final FileMessageIdRepository repository;
+    private final S3FileDownloader        s3FileDownloader;
+    private final Pain008MsgIdExtractor   msgIdExtractor;
 
-    public DuplicateCheckService(FileMessageIdRepository repository) {
-        this.repository = repository;
+    public DuplicateCheckService(FileMessageIdRepository repository,
+                                 S3FileDownloader s3FileDownloader,
+                                 Pain008MsgIdExtractor msgIdExtractor) {
+        this.repository       = repository;
+        this.s3FileDownloader = s3FileDownloader;
+        this.msgIdExtractor   = msgIdExtractor;
     }
 
     /**
-     * Retrieves the MSG_ID for an already-registered file entry.
-     * Called by GET /file/{fileId}/getMessageId.
+     * Downloads the payment XML from S3 and extracts the MsgId from GrpHdr.
      *
-     * In a real implementation this would look up the message ID from a payment
-     * file metadata table or parse it from the XML. For now it returns the msgId
-     * stored in FILE_MESSAGE_ID if the row exists, otherwise returns a placeholder
-     * so the workflow can still proceed.
-     *
-     * @param fileId the file identifier (fileDataSeq from the incoming message)
-     * @return response containing the msgId, or an empty string if not yet stored
+     * @param fileId     the file identifier (for logging)
+     * @param fileS3Path bucket-relative S3 key of the payment XML
+     * @return response containing the parsed MsgId
      */
-    public GetMessageIdResponse getMessageId(Long fileId) {
-        return repository.findById(fileId)
-                .map(row -> new GetMessageIdResponse(row.getMsgId()))
-                .orElse(new GetMessageIdResponse(""));
+    public GetMessageIdResponse getMessageId(Long fileId, String fileS3Path) {
+        System.out.println("[DuplicateCheckService] getMessageId"
+                + "  fileId=" + fileId + "  fileS3Path=" + fileS3Path);
+
+        byte[] xmlBytes = s3FileDownloader.download(fileS3Path);
+        String msgId    = msgIdExtractor.extractMsgId(xmlBytes);
+
+        System.out.println("[DuplicateCheckService] ✓ msgId=" + msgId);
+        return new GetMessageIdResponse(msgId);
     }
 
     /**
      * Checks whether the (custId, msgId) combination has already been processed.
      *
-     * Attempts to INSERT a new row. The INSERT succeeds for new files and fails
-     * with DataIntegrityViolationException for duplicates (unique constraint on
-     * CUST_ID + MSG_ID).
-     *
-     * @param request contains fileId, custId, msgId
-     * @return {@link CheckDuplicateResponse} with isDuplicate=false (new file)
-     *         or isDuplicate=true (already seen)
+     * Uses a direct native INSERT (not JPA save) so the unique constraint on
+     * (CUST_ID, MSG_ID) always fires on a duplicate — save() would silently
+     * UPDATE the existing row because FILE_ID is the same.
      */
     public CheckDuplicateResponse checkDuplicate(CheckDuplicateRequest request) {
-        System.out.println("[DuplicateCheckService] checking duplicate for"
-                + " fileId=" + request.getFileId()
-                + " custId=" + request.getCustId()
-                + " msgId="  + request.getMsgId());
+        System.out.println("[DuplicateCheckService] checkDuplicate"
+                + "  fileId=" + request.getFileId()
+                + "  custId=" + request.getCustId()
+                + "  msgId="  + request.getMsgId());
         try {
-            repository.save(new FileMessageId(
+            repository.insertFileMessageId(
                     request.getFileId(),
                     request.getCustId(),
                     request.getMsgId()
-            ));
-            System.out.println("[DuplicateCheckService] ✓ INSERT succeeded — file is NOT a duplicate");
+            );
+            System.out.println("[DuplicateCheckService] ✓ INSERT succeeded — NOT a duplicate");
             return new CheckDuplicateResponse(request.getFileId(), false);
 
         } catch (DataIntegrityViolationException e) {
-            // Unique constraint (CUST_ID, MSG_ID) violated — this (custId, msgId) pair
-            // was already inserted by a previous file, so the current file is a duplicate.
-            System.out.println("[DuplicateCheckService] ✗ DataIntegrityViolation — file IS a duplicate"
-                    + " | cause: " + e.getMostSpecificCause().getMessage());
+            System.out.println("[DuplicateCheckService] ✗ DataIntegrityViolation — IS a duplicate"
+                    + " | " + e.getMostSpecificCause().getMessage());
             return new CheckDuplicateResponse(request.getFileId(), true);
         }
     }

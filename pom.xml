@@ -72,5 +72,12 @@
             <version>42.7.5</version>
         </dependency>
 
+        <!-- AWS SDK v2 S3 — downloads payment XML for msgId extraction -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.60</version>
+        </dependency>
+
     </dependencies>
 </project>
