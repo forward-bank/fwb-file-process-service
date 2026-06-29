@@ -5,29 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="994516c4-b1ca-4efc-bfcd-caea036c1ee1" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mqjms.log.0" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mqjms.log.0.1" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mqjms.log.0.2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mqjms.log.0.2.lck" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mqjms.log.0.lck" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/forward/controller/FileProcessController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/forward/debulk/FileDebulkingProcessor.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/forward/model/TriggerMsgToMqRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/forward/model/TriggerMsgToMqResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/forward/service/FileProcessService.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/encodings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/encodings.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/forward/SyntaxValidationApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/forward/FileProcessApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/forward/model/SyntaxValidationResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/forward/model/DebulkingResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/forward/mq/MQConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/forward/mq/MQConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/forward/mq/listener/SyntaxValidationRequestListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/forward/mq/listener/FileProcessRequestListener.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/forward/validator/SyntaxValidator.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mqjms.log.0.2.lck" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mqjms.log.0.lck" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -47,7 +27,7 @@
     </option>
   </component>
   <component name="Git.Settings">
-    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/../fwb-syntax-validation-service" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 7
@@ -80,7 +60,7 @@
       <recent name="com.forward.direct.debit.listener" />
     </key>
   </component>
-  <component name="RunManager" selected="Application.FileProcessApplication">
+  <component name="RunManager" selected="Application.DirectDebitWorkflowApplication">
     <configuration name="DirectDebitWorkflowApplication" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="com.forward.direct.debit.DirectDebitWorkflowApplication" />
       <module name="fwb-direct-debit-workflow-service-2" />
@@ -122,9 +102,9 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Application.FileProcessApplication" />
-        <item itemvalue="Application.SyntaxValidationApplication" />
         <item itemvalue="Application.DirectDebitWorkflowApplication" />
+        <item itemvalue="Application.SyntaxValidationApplication" />
+        <item itemvalue="Application.FileProcessApplication" />
       </list>
     </recent_temporary>
   </component>
