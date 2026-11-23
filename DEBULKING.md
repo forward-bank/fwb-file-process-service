@@ -8,6 +8,8 @@ Payment XML file Debulking steps :
 2. Parse the xml file and use the corresponding mapping xml file to map element to corresponding Java class
    e.g. payment-file-parser-mappings-pain_008_001_08.xml
 
+3. Run validation rules along the mapping e.g. run validation for App Header, Group Header, Batch Rules, Txn Rules etc.
+
 Note that Pain008 parsing follows a streaming/callback driven approach where parsing and validation happen
 progressively as XML sections are encountered, rather than load entire Pain008 into one giant
 Java object and then validate afterwards.
@@ -163,3 +165,6 @@ public class FileDebulkMetadata{
 
 Note that most of Validation failure during each of the above steps do not cause Debulking to stop,
 they generate FSN, BTCH_PSN, TXN_PSN, and transactions are still persisted to MST_FILE_DEBULK_META table.
+
+Also the response from Debulking will be Response Code e.g. ACCP, DU02, FF02, FF03, FF04 etc.
+
