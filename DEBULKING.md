@@ -155,6 +155,9 @@ public class FileDebulkMetadata{
 	@Column(name = "PAYMENT_DATA")
 	private String paymentData; // this is serialized PaymentDataSource
 	
+	@Column(name = "STATUS")
+	private String status; // to track whether this particluar txn is DISPATCHED or not
+	
 	@Column(name = "FILE_TYPE", nullable = false)
 	@Enumerated(EnumType.STRING)
 	private FileType fileType;
