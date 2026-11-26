@@ -141,6 +141,181 @@ public TriggerToMqResponse triggerAndFormatMsgToQueue(Long custId, Long fileId, 
 
 ```
 
+## CustomEntityManagement class :
+```java
+public class CustomEntityManagement implements Closeable {
+
+    private final EntityManager entityManager;
+    private final Set<FileDebulkMetadata> debulkMetadataSet = new HashSet<>();
+    private Integer batchSize;
+    private EntityTransaction txn;
+
+    public CustomEntityManagement(EntityManagerFactory entityManagerFactory, Integer batchSize) {
+        entityManager = entityManagerFactory.createEntityManager();
+        this.batchSize = batchSize;
+    }
+
+    public CustomEntityManagement(EntityManagerFactory entityManagerFactory) {
+        entityManager = entityManagerFactory.createEntityManager();
+    }
+
+    public void closeSession() {
+        entityManager.close();
+    }
+
+    public void rollbackTransaction() throws ApplicationException {
+
+        try {
+            txn.rollback();
+        } catch (Exception e) {
+            log.error(MESSAGING_FILE_SERVICE_TECH_ERROR + EXECUTION_ERROR_UNABLE_TO_ROLLBACK_TRANSACTION.getCode() +
+                    EXECUTION_ERROR_UNABLE_TO_ROLLBACK_TRANSACTION.getMessage() +
+                    HttpStatus.INTERNAL_SERVER_ERROR + EXCEPTION_LABEL + e);
+            throw new ApplicationException(
+                    EXECUTION_ERROR_UNABLE_TO_ROLLBACK_TRANSACTION.getCode(),
+                    EXECUTION_ERROR_UNABLE_TO_ROLLBACK_TRANSACTION.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    public void updateSingleTransaction(FileDebulkMetadataOnly txn, Instant currentTime) throws ApplicationException {
+        try {
+            int updates = entityManager.createQuery("update FileDebulkMetadata set status = :status, updTime=:currentTime where id=:id")
+                    .setParameter("status", DISPATCHED)
+                    .setParameter("currentTime", currentTime)
+                    .setParameter("id", txn.getId())
+                    .executeUpdate();
+            validateSingleRowUpdated(updates, txn);
+        } catch (ApplicationException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(MESSAGING_FILE_SERVICE_TECH_ERROR + EXECUTION_ERROR_UNABLE_TO_UPDATE_ENTITY.getCode() +
+                    EXECUTION_ERROR_UNABLE_TO_UPDATE_ENTITY.getMessage() +
+                    HttpStatus.INTERNAL_SERVER_ERROR + EXCEPTION_LABEL + e);
+            throw new ApplicationException(
+                    EXECUTION_ERROR_UNABLE_TO_UPDATE_ENTITY.getCode(),
+                    EXECUTION_ERROR_UNABLE_TO_UPDATE_ENTITY.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private void validateSingleRowUpdated(int updates, FileDebulkMetadataOnly txn) throws ApplicationException {
+        if (updates != 1) {
+            log.error("Expected to update single row in MST_OP_FILE_DEBULK_META table but "
+                    + "updated {} rows for id={}", Encode.forJava(String.valueOf(updates)),
+                    Encode.forJava(txn.getId().toString()));
+            throw new ApplicationException(
+                    EXECUTION_ERROR_UNABLE_TO_UPDATE_ENTITY.getCode(),
+                    EXECUTION_ERROR_UNABLE_TO_UPDATE_ENTITY.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    public void clearEntityManager() throws ApplicationException {
+
+        try {
+            entityManager.clear();
+        } catch (Exception e) {
+            log.error(MESSAGING_FILE_SERVICE_TECH_ERROR + EXECUTION_ERROR_UNABLE_TO_CLEAR_ENTITY_MANAGER.getCode() +
+                    EXECUTION_ERROR_UNABLE_TO_CLEAR_ENTITY_MANAGER.getMessage() +
+                    HttpStatus.INTERNAL_SERVER_ERROR + EXCEPTION_LABEL + e);
+            throw new ApplicationException(
+                    EXECUTION_ERROR_UNABLE_TO_CLEAR_ENTITY_MANAGER.getCode(),
+                    EXECUTION_ERROR_UNABLE_TO_CLEAR_ENTITY_MANAGER.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    public void persistTransaction(FileDebulkMetadata transactionToSave) throws ApplicationException {
+        debulkMetadataSet.add(transactionToSave);
+        if (debulkMetadataSet.size() == batchSize) {
+            persistAllTransactions();
+        }
+    }
+
+    public void startTransaction() throws ApplicationException {
+
+        try {
+            txn = entityManager.getTransaction();
+            txn.begin();
+        } catch (Exception e) {
+            log.error(MESSAGING_FILE_SERVICE_TECH_ERROR, EXECUTION_ERROR_UNABLE_TO_START_TRANSACTION.getCode() +
+                    EXECUTION_ERROR_UNABLE_TO_START_TRANSACTION.getMessage() +
+                    HttpStatus.INTERNAL_SERVER_ERROR + EXCEPTION_LABEL + e);
+            throw new ApplicationException(
+                    EXECUTION_ERROR_UNABLE_TO_START_TRANSACTION.getCode(),
+                    EXECUTION_ERROR_UNABLE_TO_START_TRANSACTION.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    public void commitTransaction() throws ApplicationException {
+
+        try {
+            txn.commit();
+        } catch (Exception e) {
+            log.error(MESSAGING_FILE_SERVICE_TECH_ERROR, EXECUTION_ERROR_UNABLE_TO_COMMIT_TRANSACTION.getCode() +
+                    EXECUTION_ERROR_UNABLE_TO_COMMIT_TRANSACTION.getMessage() +
+                    HttpStatus.INTERNAL_SERVER_ERROR + EXCEPTION_LABEL + e);
+            throw new ApplicationException(
+                    EXECUTION_ERROR_UNABLE_TO_COMMIT_TRANSACTION.getCode(),
+                    EXECUTION_ERROR_UNABLE_TO_COMMIT_TRANSACTION.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    public void persistAllTransactions() throws ApplicationException {
+
+        try {
+            startTransaction();
+            // Persist each entity in the set before releasing it from memory
+            debulkMetadataSet.forEach(this.entityManager::persist);
+            entityManager.flush();
+            entityManager.clear();
+            commitTransaction();
+            debulkMetadataSet.clear();
+        } catch (Exception e) {
+            log.error(MESSAGING_FILE_SERVICE_TECH_ERROR, EXECUTION_ERROR_UNABLE_TO_SAVE_BATCH.getCode() +
+                    EXECUTION_ERROR_UNABLE_TO_SAVE_BATCH.getMessage() +
+                    HttpStatus.INTERNAL_SERVER_ERROR + EXCEPTION_LABEL + e);
+            throw new ApplicationException(
+                    EXECUTION_ERROR_UNABLE_TO_SAVE_BATCH.getCode(),
+                    EXECUTION_ERROR_UNABLE_TO_SAVE_BATCH.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    public void updateFileDebulkMetadata(List<FileDebulkMetadata> fileDebulkMetadataList) throws ApplicationException {
+        try {
+            startTransaction();
+            fileDebulkMetadataList.forEach(this.entityManager::merge);
+            entityManager.flush();
+            entityManager.clear();
+            commitTransaction();
+        } catch (Exception e) {
+            log.error(MESSAGING_FILE_SERVICE_TECH_ERROR + EXECUTION_ERROR_COULD_NOT_UPDATE_FILE_DEBULK_METADATA.getCode() +
+                    EXECUTION_ERROR_COULD_NOT_UPDATE_FILE_DEBULK_METADATA.getMessage() +
+                    HttpStatus.INTERNAL_SERVER_ERROR + EXCEPTION_LABEL + e);
+            throw new ApplicationException(
+                    EXECUTION_ERROR_COULD_NOT_UPDATE_FILE_DEBULK_METADATA.getCode(),
+                    EXECUTION_ERROR_COULD_NOT_UPDATE_FILE_DEBULK_METADATA.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Override
+    public void close() {
+        this.closeSession();
+    }
+}
+```
+
 ## dispatchTriggerToQueue execution scenarios :
 
 When the DB update or the MQ send fails, neither ends up done. The rollback only undoes the DB update. It never undoes a message that was already sent.
