@@ -82,8 +82,8 @@ public TriggerToMqResponse triggerAndFormatMsgToQueue(Long custId, Long fileId, 
             fileProcessMetadataRepository.saveAndFlush(fileProcessMetadata);
         } catch (Exception e) {
             log.error(MESSAGING_FILE_SERVICE_TECH_ERROR + EXECUTION_ERROR_COULD_NOT_SAVE.getCode() +
-                    EXECUTION_ERROR_COULD_NOT_SAVE.getMessageWithValue(Encode.forJava(fileProcessMetadata.getFileId().toString()))
-                    + ", custId [{}] {}" + EXCEPTION_LABEL + e, Encode.forJava(custId.toString()),
+                            EXECUTION_ERROR_COULD_NOT_SAVE.getMessageWithValue(Encode.forJava(fileProcessMetadata.getFileId().toString()))
+                            + ", custId [{}] {}" + EXCEPTION_LABEL + e, Encode.forJava(custId.toString()),
                     HttpStatus.INTERNAL_SERVER_ERROR);
             throw new ApplicationException(EXECUTION_ERROR_COULD_NOT_SAVE.getCode(),
                     EXECUTION_ERROR_COULD_NOT_SAVE.getMessageWithValue(fileProcessMetadata.getFileId().toString()),
@@ -92,7 +92,71 @@ public TriggerToMqResponse triggerAndFormatMsgToQueue(Long custId, Long fileId, 
         return new TriggerToMqResponse(processedTransactions);
     }
 }
+   /**
+    * Method to update the processing status for each transaction and dispatch trigger about the transaction downstream.
+    * Each time this method is executed, a new transaction will start to enable the ability to rollback the DB update in case
+    * dispatching to the queue fails.
+    *
+    * @param transaction            - a transaction to process
+    * @param customEntityManagement - a custom entity manager
+    * @param currentTime            - now
+    * @throws ApplicationException - in the event that fetching file metadata
+    */
+   @VisibleForTesting // It shouldn't be, but I can't be bothered to rewrite the tests right now
+   void dispatchTriggerToQueue(
+           FileDebulkMetadataOnly transaction,
+           CustomEntityManagement customEntityManagement,
+           Instant currentTime,
+           String outputChannelCode
+) throws ApplicationException {
+
+      TriggerMsgToMQ message = TriggerMsgToMQ.builder()
+              .fileId(transaction.getFileId())
+              .custId(transaction.getCustId())
+              .lti(transaction.getLti())
+              .lbi(transaction.getLbi())
+              .psnCode(transaction.getPsnCode())
+              .psnLevel(transaction.getPsnLevel())
+              .fileType(transaction.getFileType())
+              .btchBookg(transaction.getBtchBookg())
+              .outputChannelCode(outputChannelCode)
+              .build();
+
+      try {
+         customEntityManagement.startTransaction();
+         customEntityManagement.updateSingleTransaction(transaction, currentTime);
+         mqTriggerService.postTriggerToQueue(message, transaction.getFileId());
+         customEntityManagement.commitTransaction();
+         log.debug("Dispatching metadata sent to the queue: {}", Encode.forJava(message.toString()));
+      } catch (ApplicationException e) {
+         customEntityManagement.rollbackTransaction();
+         log.error(MESSAGING_FILE_SERVICE_TECH_ERROR + EXECUTION_ERROR_WHILE_DISPATCHING_TRANSACTION.getCode() +
+                         EXECUTION_ERROR_WHILE_DISPATCHING_TRANSACTION.getMessage() + " {} for custId [{}], fileId [{}], LBI [{}], LTI [{}]" + EXCEPTION_LABEL + e, HttpStatus.INTERNAL_SERVER_ERROR,
+                 Encode.forJava(message.getCustId().toString()),
+                 Encode.forJava(message.getFileId().toString()), Encode.forJava(message.getLbi()),
+                 Encode.forJava(message.getLti()));
+         throw e;
+      }
+   }
+
 ```
+
+## dispatchTriggerToQueue execution scenarios :
+
+When the DB update or the MQ send fails, neither ends up done. The rollback only undoes the DB update. It never undoes a message that was already sent.
+
+`startTransaction` → `updateSingleTransaction (status = DISPATCHED)` → `postTriggerToQueue (MQ send)` → `commitTransaction`
+
+The update runs first, then the send, and the commit comes last.
+
+## Failure cases
+
+| Failure point | DB result | MQ result | Consistent? |
+|---|---|---|---|
+| `startTransaction()` fails | Nothing changed | Nothing sent | Yes |
+| `updateSingleTransaction` fails (error, or update count != 1) | Rolled back | Nothing sent, because the update comes first | Yes |
+| `postTriggerToQueue` fails (JSON or MQ error) | Rolled back, so the row stays not dispatched | Not sent | Yes |
+| `commitTransaction()` fails after a successful send | Rolled back, so the row stays not dispatched | Already sent | No, a retry sends a duplicate |
 
 ## Example Scenario
 
